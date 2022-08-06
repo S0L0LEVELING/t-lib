@@ -4,7 +4,7 @@ lua54 'yes'
 
 author 'Trase'
 description 'Libary for all Trase.Dev products and assets.'
-version '1.0.0'
+version '1.0.1'
 
 shared_script 'init.lua'
 client_script 'client/*.lua'
