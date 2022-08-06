@@ -140,6 +140,6 @@ lib.spawnvehicle = function(args)
             SetPedIntoVehicle(PlayerPedId(), vehicle, args?.seat)
         end
 
-        return vehicle
+        return vehicle 
 	end)
 end
