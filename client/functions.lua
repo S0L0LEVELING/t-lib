@@ -64,23 +64,46 @@ lib.createmarker = function(args)
     )
 end
 
-local function hasLoaded(fn, type, request, limit)
-	local timeout = limit or 100
-	while not fn(request) do
-		Wait(0)
-		timeout -= 1
-		if timeout < 1 then
-			return print(('Unable to load %s after %s ticks (%s)'):format(type, limit or 100, request))
+local function request(native, hasLoaded, requestType, name, timeout)
+	native(name)
+
+	if coroutine.running() then
+		if not timeout then
+			timeout = 500
 		end
+
+		for i = 1, timeout do
+			Wait(0)
+			if hasLoaded(name) then
+				return name
+			end
+		end
+
+		print(("Failed to load %s '%s' after %s ticks"):format(requestType, name, timeout))
 	end
-	return request
+
+	return name
 end
 
 lib.loadanimdict = function(dict)
-    if HasAnimDictLoaded(dict) then return dict end
-    assert(DoesAnimDictExist(dict), ('Attempted to load an invalid animdict (%s)'):format(dict))
-    RequestAnimDict(dict)
-    return hasLoaded(HasAnimDictLoaded, 'animdict', dict, timeout)
+    if HasAnimDictLoaded(animDict) then return animDict end
+
+	if not DoesAnimDictExist(animDict) then
+		return error(("Attempted to load invalid animDict (%s)"):format(animDict))
+	end
+
+	return request(RequestAnimDict, HasAnimDictLoaded, 'animDict', animDict, timeout)
+end
+
+lib.requestmodel = function(model)
+    if not tonumber(model) then model = joaat(model) end
+	if HasModelLoaded(model) then return model end
+
+	if not IsModelValid(model) then
+		return error(("Attempted to load invalid model (%s)"):format(model))
+	end
+
+	return request(RequestModel, HasModelLoaded, 'model', model, timeout)
 end
 
 lib.playanim = function(wait, dict, name, blendIn, blendOut, duration, flag, rate, lockX, lockY, lockZ)
@@ -90,5 +113,33 @@ lib.playanim = function(wait, dict, name, blendIn, blendOut, duration, flag, rat
 		TaskPlayAnim(ped, dict, name, blendIn, blendOut, duration, flag, rate, lockX, lockY, lockZ)
 		Wait(wait)
 		if wait > 0 then ClearPedSecondaryTask(ped) end
+	end)
+end
+
+lib.spawnvehicle = function(args)
+    assert(type(args) == 'table', ('%s attempted creating a vehicle but failed. (args ~= table)'):format(GetInvokingResource()))
+    local model = (type(args?.model) == 'number' and args?.model or GetHashKey(args?.model))
+    local networked = args?.networked == nil and true or args?.networked
+    CreateThread(function()
+		lib?.requestmodel(model)
+
+		local vehicle = CreateVehicle(model, args?.coords?.xyz, args?.coords?.w or 0.0, networked, false)
+
+		if networked then
+			local id = NetworkGetNetworkIdFromEntity(vehicle)
+			SetNetworkIdCanMigrate(id, true)
+			SetEntityAsMissionEntity(vehicle, true, false)
+		end
+
+		SetVehicleHasBeenOwnedByPlayer(vehicle, true)
+		SetVehicleNeedsToBeHotwired(vehicle, false)
+		SetModelAsNoLongerNeeded(model)
+		SetVehRadioStation(vehicle, 'OFF')
+
+        if (args?.seat) then
+            SetPedIntoVehicle(PlayerPedId(), vehicle, args?.seat)
+        end
+
+        return vehicle
 	end)
 end
